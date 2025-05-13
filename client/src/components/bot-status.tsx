@@ -1,13 +1,13 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { BotStatus as BotStatusType } from '@/lib/types';
+import { BotStatus } from '@/lib/types';
 
-interface BotStatusComponentProps {
-  status: BotStatusType;
+interface BotStatusProps {
+  status: BotStatus;
   onManage: () => void;
 }
 
-export function BotStatusComponent({ status, onManage }: BotStatusComponentProps) {
+export function BotStatus({ status, onManage }: BotStatusProps) {
   return (
     <div className="bg-twitter-darker border border-twitter-border rounded-xl p-4 mb-6">
       <div className="flex items-center justify-between">

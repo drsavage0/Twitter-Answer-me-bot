@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Header } from '@/components/layout/header';
 import { Sidebar } from '@/components/layout/sidebar';
 import { FooterActions } from '@/components/layout/footer-actions';
-import { BotStatusComponent } from '@/components/bot-status';
+import { BotStatus } from '@/components/bot-status';
 import { MentionCard } from '@/components/mention-card';
 import { CommandCard } from '@/components/command-card';
 import { ActivityOverview } from '@/components/activity-overview';
@@ -75,7 +75,7 @@ export default function Dashboard() {
         
         <main className="flex-1 flex flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto p-4">
-            <BotStatusComponent 
+            <BotStatus 
               status={status} 
               onManage={handleSettingsClick} 
             />

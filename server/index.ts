@@ -1,29 +1,10 @@
 import express, { type Request, Response, NextFunction } from "express";
-import session from "express-session";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-
-// Add this line to extend the Request type with session
-declare module "express-session" {
-  interface SessionData {
-    userId?: number;
-  }
-}
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-
-// Setup session middleware
-app.use(session({
-  secret: process.env.SESSION_SECRET || "quiz-app-secret-key",
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
-    secure: process.env.NODE_ENV === "production",
-  }
-}));
 
 app.use((req, res, next) => {
   const start = Date.now();
