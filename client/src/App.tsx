@@ -6,12 +6,20 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Settings from "@/pages/settings";
+import QuizDashboard from "@/pages/quiz-dashboard";
+import CreateQuiz from "@/pages/create-quiz";
+import QuizDetail from "@/pages/quiz-detail";
+import PlayQuiz from "@/pages/play-quiz";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/settings" component={Settings} />
+      <Route path="/quizzes" component={QuizDashboard} />
+      <Route path="/create-quiz" component={CreateQuiz} />
+      <Route path="/quiz/:id" component={QuizDetail} />
+      <Route path="/play/:participantId" component={PlayQuiz} />
       <Route component={NotFound} />
     </Switch>
   );
