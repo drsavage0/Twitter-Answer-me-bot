@@ -550,6 +550,261 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }));
   
+  // Quiz API routes
+  app.get("/api/quizzes", asyncHandler(async (req: Request, res: Response) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+      const quizzes = await storage.getQuizzes(limit);
+      res.json(quizzes);
+    } catch (error) {
+      console.error("Error getting quizzes:", error);
+      res.status(500).json({ message: "Failed to get quizzes", error: (error as Error).message });
+    }
+  }));
+
+  app.get("/api/quizzes/mine", asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.session?.userId;
+    if (!userId) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    try {
+      const quizzes = await storage.getQuizzesByUser(userId);
+      res.json(quizzes);
+    } catch (error) {
+      console.error("Error getting user quizzes:", error);
+      res.status(500).json({ message: "Failed to get user quizzes", error: (error as Error).message });
+    }
+  }));
+
+  app.get("/api/quizzes/:id", asyncHandler(async (req: Request, res: Response) => {
+    try {
+      const quizId = parseInt(req.params.id);
+      const userId = req.session?.userId;
+      
+      const quiz = await storage.getQuizWithQuestions(quizId);
+      if (!quiz) {
+        return res.status(404).json({ message: "Quiz not found" });
+      }
+      
+      // Add a flag to indicate if the current user is the creator
+      const isCreator = userId && quiz.creatorId === userId;
+      
+      res.json({
+        ...quiz,
+        isCreator
+      });
+    } catch (error) {
+      console.error("Error getting quiz:", error);
+      res.status(500).json({ message: "Failed to get quiz", error: (error as Error).message });
+    }
+  }));
+
+  app.post("/api/quizzes", asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.session?.userId;
+    if (!userId) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    try {
+      const quizData = insertQuizSchema.parse({
+        ...req.body,
+        creatorId: userId,
+        code: nanoid(6)
+      });
+      
+      const quiz = await storage.createQuiz(quizData);
+      res.json(quiz);
+    } catch (error) {
+      console.error("Error creating quiz:", error);
+      res.status(500).json({ message: "Failed to create quiz", error: (error as Error).message });
+    }
+  }));
+
+  app.post("/api/quizzes/:id/questions", asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.session?.userId;
+    if (!userId) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    try {
+      const quizId = parseInt(req.params.id);
+      
+      // Check if the user is the creator of the quiz
+      const quiz = await storage.getQuiz(quizId);
+      if (!quiz) {
+        return res.status(404).json({ message: "Quiz not found" });
+      }
+      
+      if (quiz.creatorId !== userId) {
+        return res.status(403).json({ message: "You don't have permission to add questions to this quiz" });
+      }
+      
+      const { generate, count = 5 } = req.body;
+      
+      if (generate) {
+        // Generate questions using OpenAI
+        const questions = await openaiService.generateQuizQuestions(
+          quiz.title,
+          quiz.difficulty as any || "medium",
+          count,
+          "multiple_choice"
+        );
+        
+        // Add generated questions to the quiz
+        const addedQuestions = [];
+        for (const question of questions) {
+          const addedQuestion = await storage.addQuestion({
+            quizId,
+            text: question.question,
+            type: "multiple_choice",
+            options: question.options,
+            correctOptionId: question.correctOptionId,
+            explanation: question.explanation
+          });
+          addedQuestions.push(addedQuestion);
+        }
+        
+        res.json(addedQuestions);
+      } else {
+        // Manual question addition
+        const questionData = insertQuestionSchema.parse({
+          ...req.body,
+          quizId
+        });
+        
+        const question = await storage.addQuestion(questionData);
+        res.json(question);
+      }
+    } catch (error) {
+      console.error("Error adding questions:", error);
+      res.status(500).json({ message: "Failed to add questions", error: (error as Error).message });
+    }
+  }));
+
+  app.post("/api/quizzes/join", asyncHandler(async (req: Request, res: Response) => {
+    try {
+      const { quizId, code, displayName } = req.body;
+      
+      if (!quizId || !code || !displayName) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+      
+      // Verify the quiz code
+      const quiz = await storage.getQuiz(quizId);
+      if (!quiz || quiz.code !== code) {
+        return res.status(400).json({ message: "Invalid quiz code" });
+      }
+      
+      // Generate a username if the user is not logged in
+      const userId = req.session?.userId || 0;
+      const username = userId ? (await storage.getUser(userId))?.username || "anonymous" : "anonymous";
+      
+      // Create a participant record
+      const participant = await storage.addParticipant({
+        quizId,
+        userId: userId || 0,
+        username,
+        displayName,
+        score: 0
+      });
+      
+      res.json({ participantId: participant.id, message: "Joined quiz successfully" });
+    } catch (error) {
+      console.error("Error joining quiz:", error);
+      res.status(500).json({ message: "Failed to join quiz", error: (error as Error).message });
+    }
+  }));
+
+  app.post("/api/quizzes/answer", asyncHandler(async (req: Request, res: Response) => {
+    try {
+      const { participantId, questionId, selectedOptionId } = req.body;
+      
+      if (!participantId || !questionId || selectedOptionId === undefined) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+      
+      // Get the question to check the answer
+      const question = await storage.getQuestion(questionId);
+      if (!question) {
+        return res.status(404).json({ message: "Question not found" });
+      }
+      
+      // Check if the answer is correct
+      const isCorrect = question.correctOptionId === selectedOptionId;
+      
+      // Record the answer
+      const answer = await storage.addAnswer({
+        participantId,
+        questionId,
+        selectedOptionId,
+        isCorrect
+      });
+      
+      // If the answer is correct, update the participant's score
+      if (isCorrect) {
+        const participant = await storage.getParticipant(participantId);
+        if (participant) {
+          await storage.updateParticipantScore(participantId, (participant.score || 0) + 1);
+        }
+      }
+      
+      res.json({ 
+        answerId: answer.id, 
+        isCorrect, 
+        correctOptionId: question.correctOptionId,
+        explanation: question.explanation
+      });
+    } catch (error) {
+      console.error("Error submitting answer:", error);
+      res.status(500).json({ message: "Failed to submit answer", error: (error as Error).message });
+    }
+  }));
+
+  app.get("/api/participants/:id", asyncHandler(async (req: Request, res: Response) => {
+    try {
+      const participantId = parseInt(req.params.id);
+      
+      // Get the participant
+      const participant = await storage.getParticipant(participantId);
+      if (!participant) {
+        return res.status(404).json({ message: "Participant not found" });
+      }
+      
+      // Get the quiz with questions
+      const quiz = await storage.getQuizWithQuestions(participant.quizId);
+      if (!quiz) {
+        return res.status(404).json({ message: "Quiz not found" });
+      }
+      
+      // Get the participant's answers
+      const answers = await storage.getAnswersByParticipant(participantId);
+      
+      // Get leaderboard for this quiz
+      const allParticipants = await storage.getParticipantsByQuiz(participant.quizId);
+      
+      // Create leaderboard with rankings
+      const leaderboard = allParticipants
+        .sort((a, b) => (b.score || 0) - (a.score || 0))
+        .map((p, index) => ({
+          username: p.username,
+          displayName: p.displayName,
+          score: p.score || 0,
+          rank: index + 1
+        }));
+      
+      res.json({
+        participant,
+        quiz,
+        answers,
+        leaderboard
+      });
+    } catch (error) {
+      console.error("Error getting participant data:", error);
+      res.status(500).json({ message: "Failed to get participant data", error: (error as Error).message });
+    }
+  }));
+  
   const httpServer = createServer(app);
   return httpServer;
 }
