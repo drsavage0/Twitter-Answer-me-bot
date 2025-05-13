@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -6,95 +6,154 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
-  twitterAccessToken: text("twitter_access_token"),
-  twitterAccessSecret: text("twitter_access_secret"),
-  twitterUsername: text("twitter_username"),
+  displayName: text("display_name"),
+  profileInfo: jsonb("profile_info"),
   openaiApiKey: text("openai_api_key"),
-  botActive: boolean("bot_active").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const mentions = pgTable("mentions", {
+export const quizzes = pgTable("quizzes", {
   id: serial("id").primaryKey(),
-  tweetId: text("tweet_id").notNull().unique(),
-  authorUsername: text("author_username").notNull(),
-  authorName: text("author_name"),
-  authorProfileImage: text("author_profile_image"),
+  creatorId: integer("creator_id").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  isPublic: boolean("is_public").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  code: text("code").notNull().unique(),
+});
+
+export const participants = pgTable("participants", {
+  id: serial("id").primaryKey(),
+  quizId: integer("quiz_id").notNull(),
+  userId: integer("user_id").notNull(),
+  score: integer("score").default(0),
+  hasJoined: boolean("has_joined").default(false),
+  joinedAt: timestamp("joined_at"),
+});
+
+export const questions = pgTable("questions", {
+  id: serial("id").primaryKey(),
+  quizId: integer("quiz_id").notNull(),
   content: text("content").notNull(),
-  command: text("command"),
-  createdAt: timestamp("created_at").notNull(),
-  responseId: text("response_id"),
-  responseContent: text("response_content"),
-  responseMode: text("response_mode"),
-  responseStatus: text("response_status").default("pending"),
-  responseSentAt: timestamp("response_sent_at"),
+  about: integer("about"), // user ID this question is about
+  options: jsonb("options").notNull(), // array of possible answers
+  correctOption: integer("correct_option").notNull(),
+  explanation: text("explanation"),
+  type: text("question_type").default("multiple_choice"),
+});
+
+export const answers = pgTable("answers", {
+  id: serial("id").primaryKey(),
+  questionId: integer("question_id").notNull(),
+  participantId: integer("participant_id").notNull(),
+  selectedOption: integer("selected_option").notNull(),
+  isCorrect: boolean("is_correct").notNull(),
+  answeredAt: timestamp("answered_at").defaultNow(),
 });
 
 export const stats = pgTable("stats", {
   id: serial("id").primaryKey(),
-  totalResponses: integer("total_responses").default(0),
-  todayResponses: integer("today_responses").default(0),
-  positiveRating: integer("positive_rating").default(0),
-  negativeRating: integer("negative_rating").default(0),
-  avgResponseTime: integer("avg_response_time").default(0),
-  wittyCount: integer("witty_count").default(0),
-  roastCount: integer("roast_count").default(0),
-  debateCount: integer("debate_count").default(0),
-  peaceCount: integer("peace_count").default(0),
-  date: timestamp("date").notNull(),
+  userId: integer("user_id").notNull(),
+  totalGames: integer("total_games").default(0),
+  totalWins: integer("total_wins").default(0),
+  averageScore: integer("average_score").default(0),
+  questionsAnswered: integer("questions_answered").default(0),
+  lastUpdated: timestamp("last_updated").defaultNow(),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
-
-export const insertMentionSchema = createInsertSchema(mentions).omit({
+// Insert Schemas
+export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
+  createdAt: true,
+  profileInfo: true,
+}).extend({
+  confirmPassword: z.string().min(6),
+});
+
+export const insertQuizSchema = createInsertSchema(quizzes).omit({
+  id: true,
+  createdAt: true,
+  code: true,
+});
+
+export const insertParticipantSchema = createInsertSchema(participants).omit({
+  id: true,
+  score: true,
+  joinedAt: true,
+});
+
+export const insertQuestionSchema = createInsertSchema(questions).omit({
+  id: true,
+});
+
+export const insertAnswerSchema = createInsertSchema(answers).omit({
+  id: true,
+  answeredAt: true,
 });
 
 export const insertStatsSchema = createInsertSchema(stats).omit({
   id: true,
+  lastUpdated: true,
 });
 
+// Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
-export type InsertMention = z.infer<typeof insertMentionSchema>;
-export type Mention = typeof mentions.$inferSelect;
+export type InsertQuiz = z.infer<typeof insertQuizSchema>;
+export type Quiz = typeof quizzes.$inferSelect;
+
+export type InsertParticipant = z.infer<typeof insertParticipantSchema>;
+export type Participant = typeof participants.$inferSelect;
+
+export type InsertQuestion = z.infer<typeof insertQuestionSchema>;
+export type Question = typeof questions.$inferSelect;
+
+export type InsertAnswer = z.infer<typeof insertAnswerSchema>;
+export type Answer = typeof answers.$inferSelect;
 
 export type InsertStats = z.infer<typeof insertStatsSchema>;
 export type Stats = typeof stats.$inferSelect;
 
-export type ResponseMode = "witty" | "roast" | "debate" | "peace";
-export type ResponseStatus = "pending" | "sent" | "failed";
+// Additional Types for the App
+export type QuestionType = "multiple_choice" | "true_false" | "open_ended";
 
-export interface MentionWithResponse extends Mention {
-  isLoading?: boolean;
+export interface QuestionOption {
+  id: number;
+  text: string;
 }
 
-export interface BotStatus {
-  active: boolean;
-  connected: boolean;
+export interface QuizWithQuestions extends Quiz {
+  questions: Question[];
+  participants: number;
+}
+
+export interface UserProfile {
+  preferences: string[];
+  interests: string[];
+  traits: string[];
+  facts: Record<string, string>;
+}
+
+export interface GameState {
+  quizId: number;
+  participants: Participant[];
+  currentQuestionIndex: number;
+  status: "waiting" | "playing" | "finished";
+}
+
+export interface LeaderboardEntry {
   username: string;
-  description: string;
+  displayName: string;
+  score: number;
+  rank: number;
 }
 
-export interface BotStats {
-  totalResponses: number;
-  todayResponses: number;
-  positiveRating: number;
-  avgResponseTime: number;
-  responseTypes: {
-    witty: number;
-    roast: number;
-    debate: number;
-    peace: number;
-  };
-}
-
-export interface Command {
-  name: string;
-  icon: string;
+export interface QuizSummary {
+  id: number;
+  title: string;
   description: string;
-  example: string;
+  creatorName: string;
+  participants: number;
+  questions: number;
 }
