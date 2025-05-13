@@ -8,13 +8,31 @@ interface ActivityOverviewProps {
 }
 
 export function ActivityOverview({ stats }: ActivityOverviewProps) {
-  const { responseTypes } = stats;
+  // Handle case where stats might be undefined or null
+  if (!stats) {
+    return (
+      <div className="mb-6">
+        <h2 className="text-xl font-bold mb-3">Activity Overview</h2>
+        <div className="border border-twitter-border rounded-xl p-4 bg-twitter-darker text-center py-8">
+          <p className="text-twitter-text-secondary">Loading statistics...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Default values for response types if undefined
+  const responseTypes = stats.responseTypes || {
+    witty: 0,
+    roast: 0,
+    debate: 0,
+    peace: 0
+  };
   
   const segments = [
-    { label: 'Witty', value: responseTypes.witty, color: 'bg-blue-500' },
-    { label: 'Roast', value: responseTypes.roast, color: 'bg-red-500' },
-    { label: 'Debate', value: responseTypes.debate, color: 'bg-yellow-500' },
-    { label: 'Peace', value: responseTypes.peace, color: 'bg-green-500' },
+    { label: 'Witty', value: responseTypes.witty || 0, color: 'bg-blue-500' },
+    { label: 'Roast', value: responseTypes.roast || 0, color: 'bg-red-500' },
+    { label: 'Debate', value: responseTypes.debate || 0, color: 'bg-yellow-500' },
+    { label: 'Peace', value: responseTypes.peace || 0, color: 'bg-green-500' },
   ];
 
   return (
@@ -22,15 +40,15 @@ export function ActivityOverview({ stats }: ActivityOverviewProps) {
       <h2 className="text-xl font-bold mb-3">Activity Overview</h2>
       <div className="border border-twitter-border rounded-xl p-4 bg-twitter-darker">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Statistic value={stats.totalResponses} label="Total Responses" />
-          <Statistic value={stats.todayResponses} label="Today" />
+          <Statistic value={stats.totalResponses || 0} label="Total Responses" />
+          <Statistic value={stats.todayResponses || 0} label="Today" />
           <Statistic 
-            value={`${stats.positiveRating}%`} 
+            value={`${stats.positiveRating || 0}%`} 
             label="Positive Feedback" 
             valueClassName="text-green-500"
           />
           <Statistic 
-            value={`${(stats.avgResponseTime / 1000).toFixed(1)}s`} 
+            value={`${((stats.avgResponseTime || 0) / 1000).toFixed(1)}s`} 
             label="Avg Response Time" 
             valueClassName="text-yellow-500"
           />

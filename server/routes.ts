@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import twitterService from "./lib/twitter";
-import openaiService from "./lib/openai";
+import openaiService, { OpenAIService } from "./lib/openai";
 import { insertMentionSchema, ResponseMode } from "@shared/schema";
 import { z } from "zod";
 
@@ -129,7 +129,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { apiKey } = schema.parse(req.body);
       
       // Test the API key with a simple request
-      const testService = new openaiService.constructor(apiKey);
+      // Create a new instance of OpenAI service with the provided key
+      const testService = {
+        generateWittyResponse: async (message: string, username: string, mode: ResponseMode) => {
+          const service = new OpenAIService(apiKey);
+          return service.generateWittyResponse(message, username, mode);
+        }
+      };
+      
       const testResponse = await testService.generateWittyResponse(
         "Test message", 
         "testuser",
@@ -178,8 +185,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Generate response
-      const openai = new openaiService.constructor(adminUser.openaiApiKey);
-      const response = await openai.generateWittyResponse(
+      const response = await openaiService.generateWittyResponse(
         mention.content,
         mention.authorUsername,
         mode as ResponseMode
@@ -284,11 +290,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Only auto-respond if OpenAI key is configured
         if (adminUser.openaiApiKey) {
           // Detect command type
-          const openai = new openaiService.constructor(adminUser.openaiApiKey);
-          const { command } = await openai.detectCommandType(mention.text);
+          const { command } = await openaiService.detectCommandType(mention.text);
           
           // Generate response
-          const response = await openai.generateWittyResponse(
+          const response = await openaiService.generateWittyResponse(
             mention.text,
             mention.author.username,
             command
