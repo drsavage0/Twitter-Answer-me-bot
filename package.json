@@ -1,20 +1,19 @@
 {
-  "name": "twitter-bot",
+  "name": "twitter-answer-me-bot",
   "version": "1.0.0",
   "type": "module",
-  "main": "index.ts",
+  "main": "build/index.js",
   "scripts": {
     "dev": "ts-node index.ts",
     "build": "tsc",
     "start": "node build/index.js"
   },
   "dependencies": {
-    "express": "^4.21.2",
-    "dotenv": "^16.5.0",
-    "twitter-api-v2": "^1.23.2"
+    "express": "^4.18.2"
   },
   "devDependencies": {
-    "ts-node": "^10.9.2",
-    "typescript": "^5.6.3"
+    "ts-node": "^10.9.1",
+    "typescript": "^5.3.3",
+    "@types/node": "^20.11.27"
   }
 }
